@@ -31,6 +31,8 @@ l_avgFuelConsumption = 0
 l_tempFuelConsumption=0
 l_avgFuelConsumptionPerLap=0
 l_prevLapFuelConsumption=0
+l_fuelRangeKM=0
+l_fuelRangeLaps=0
 
 ########## MISC ##########
 
@@ -39,8 +41,6 @@ l_odometer = 0
 ###############################
 ########## VARIABLES ##########
 ###############################
-
-lapCount=0
 
 ########## ENGINE ##########
 
@@ -60,15 +60,21 @@ fuelStateTemp=0
 economyOdometer=0
 fuelConsumedState=0
 fuelConsumedStateTemp=0
+fuelRangeKM=0
+fuelRangeLaps=0
 
 ########## MISC ##########
 
 odometer = 0
+lapCount=0
+lapTimeSum=0
+avgLapTime=0
 
 ########## TIMERS ##########
 
 updateTimer=0
 economyTimer=0
+prevLapFuelColorTimer=0
 
 def acMain(ac_version):
     global l_lapCount
@@ -81,12 +87,14 @@ def acMain(ac_version):
     global l_tempFuelConsumption
     global l_avgFuelConsumptionPerLap
     global l_prevLapFuelConsumption
+    global l_fuelRangeKM
+    global l_fuelRangeLaps
 
     ac.initFont(0, "Roboto", 1, 1)
 
 
     appWindow = ac.newApp("TestingGround")
-    ac.setSize(appWindow, 300, 200)
+    ac.setSize(appWindow, 300, 250)
     ac.setBackgroundOpacity(appWindow, 1)
 
     ac.log("Hello, log test")
@@ -132,6 +140,14 @@ def acMain(ac_version):
     ac.setPosition(l_prevLapFuelConsumption, 3, 165)
     setRoboto(l_prevLapFuelConsumption, 15)
 
+    l_fuelRangeKM = ac.addLabel(appWindow, "Fuel range: 0km")
+    ac.setPosition(l_fuelRangeKM, 3, 180)
+    setRoboto(l_fuelRangeKM, 15)
+
+    l_fuelRangeLaps = ac.addLabel(appWindow, "Fuel range: 0 laps")
+    ac.setPosition(l_fuelRangeLaps, 3, 195)
+    setRoboto(l_fuelRangeLaps, 15)
+
     return "TestingGround"
 
 def setRoboto(labelName, size):
@@ -140,15 +156,21 @@ def setRoboto(labelName, size):
     ac.setFontColor(labelName, 0.86, 0.86, 0.86, 1)
 
 def acUpdate(deltaT):
-    global l_lapCount, l_speed,l_rpm, l_boost, l_fuel, l_odometer, l_avgFuelConsumption, l_tempFuelConsumption, l_avgFuelConsumptionPerLap, l_prevLapFuelConsumption
-    global lapCount, speed, rpm, boost, fuel, odometer, fuelConsumption, currentFuelConsumption, avgFuelConsumptionPerLap, prevLapFuelConsumption, prevLapFuelConsumption
+    global l_lapCount, l_speed,l_rpm, l_boost, l_fuel, l_odometer, l_avgFuelConsumption, l_tempFuelConsumption, l_avgFuelConsumptionPerLap, l_prevLapFuelConsumption, l_fuelRangeKM, l_fuelRangeLaps
+    global lapCount, speed, rpm, boost, fuel, odometer, fuelConsumption, currentFuelConsumption, avgFuelConsumptionPerLap, prevLapFuelConsumption, prevLapFuelConsumption, fuelRangeKM, fuelRangeLaps
     global fuelState, fuelConsumedStateTemp, fuelConsumedState, fuelStateTemp, economyOdometer
-    global economyTimer, updateTimer
+    global economyTimer, updateTimer, prevLapFuelColorTimer
     updateTimer += deltaT
     economyTimer += deltaT
-    
-    
+    prevLapFuelColorTimer += deltaT
+
+    odometer += deltaT * ac.getCarState(0, acsys.CS.SpeedKMH) / 3600
     laps = ac.getCarState(0, acsys.CS.LapCount)
+    fuel = info.physics.fuel
+    speed = ac.getCarState(0, acsys.CS.SpeedKMH)
+    boost = ac.getCarState(0, acsys.CS.TurboBoost)
+    rpm = ac.getCarState(0, acsys.CS.RPM)
+    
     if laps > lapCount:
         lapCount=laps
         avgFuelConsumptionPerLap = fuelConsumedStateTemp/lapCount
@@ -162,28 +184,23 @@ def acUpdate(deltaT):
         else:
           prevLapFuelConsumption = prevLapFuelConsumption - info.physics.fuel
           ac.setText(l_prevLapFuelConsumption, "Previous lap fuel consumption: {:.2f}l".format(prevLapFuelConsumption))
-          prevLapFuelConsumption = info.physics.fuel
+          prevLapFuelColorTimer = 0
+          if avgFuelConsumptionPerLap >= prevLapFuelConsumption:
+            ac.setFontColor(l_prevLapFuelConsumption, 0, 0.86, 0, 1)
+          elif avgFuelConsumptionPerLap*1.1 < prevLapFuelConsumption:
+            ac.setFontColor(l_prevLapFuelConsumption, 0.86, 0, 0, 1)
+          else:
+            ac.setFontColor(l_prevLapFuelConsumption, 0.86, 0.86, 0, 1)
+          prevLapFuelConsumption = info.physics.fuel 
 
-           
-    
-    if updateTimer > 0.1:
-      speed = ac.getCarState(0, acsys.CS.SpeedKMH)
-      ac.setText(l_speed, "Speed: {:.1f}".format(speed))
-       
-    if updateTimer > 0.1:
-      rpm = ac.getCarState(0, acsys.CS.RPM)
-      ac.setText(l_rpm, "RPM: {:.0f}".format(rpm))
-    
-    boost = ac.getCarState(0, acsys.CS.TurboBoost)
-    ac.setText(l_boost, "Boost: {:.2f}".format(boost))  
-    
-    odometer += deltaT * ac.getCarState(0, acsys.CS.SpeedKMH) / 3600
-    ac.setText(l_odometer, "Distance {:.2f}".format(odometer))
+    if fuel < avgFuelConsumptionPerLap * 1.1:
+      ac.setFontColor(l_fuel, 0.86, 0, 0, 1)
+    elif fuel < avgFuelConsumptionPerLap * 2.2:
+      ac.setFontColor(l_fuel, 0.86, 0.86, 0, 1)
+    else:
+      ac.setFontColor(l_fuel, 0.86, 0.86, 0.86, 1)
 
-    fuel = info.physics.fuel
-    ac.setText(l_fuel, "Fuel: {:.2f}".format(fuel))
-
-    if fuelState == 0 or fuel > fuelState:
+    if fuelState == 0 or fuel > fuelState or fuelState - fuel > 0.01:
       fuelState = info.physics.fuel
       fuelStateTemp = info.physics.fuel
     elif fuel <= fuelState:
@@ -194,21 +211,50 @@ def acUpdate(deltaT):
         fuelConsumedState = fuelStateTemp - fuel
         currentFuelConsumption = fuelConsumedState / (economyOdometer/100)
         if currentFuelConsumption > 999.9:
-          ac.setText(l_tempFuelConsumption,"Current fuel consumption: 999.9+l/100km".format(currentFuelConsumption))
+          ac.setText(l_tempFuelConsumption,"Current fuel consumption: 999.9+l/100km")
+          ac.setFontColor(l_tempFuelConsumption, 1,0,0,1)
         else:
           ac.setText(l_tempFuelConsumption,"Current fuel consumption: {:.2f}l/100km".format(currentFuelConsumption))
+          ac.setFontColor(l_tempFuelConsumption, 0.86, 0.86, 0.86, 1)
         fuelStateTemp = fuel
         economyOdometer = 0
         if odometer > 0.5:
           ac.setText(l_avgFuelConsumption,"Fuel consumption: {:.2f}l/100km".format(fuelConsumption))
       elif economyTimer > 1:
          fuelConsumedState = fuelStateTemp - fuel
+         ac.setText(l_avgFuelConsumption,"Fuel consumption: {:.2f}l/100km".format(fuelConsumption))
          ac.setText(l_tempFuelConsumption,"Current fuel consumption: {:.1f}l/h".format(fuelConsumedState*3600))
+         ac.setFontColor(l_tempFuelConsumption, 0.86, 0.86, 0.86, 1)
          fuelStateTemp = fuel
          economyOdometer = 0
       fuelState = fuel
+    
+    if avgFuelConsumptionPerLap == 0:
+      fuelRangeLaps = 0
+    else:
+      fuelRangeLaps = fuel / avgFuelConsumptionPerLap
+    fuelRangeKM = (fuel / fuelConsumption) * 100
+    
+    if updateTimer > 0.1:
+      ac.setText(l_speed, "Speed: {:.1f}".format(speed))
+
+      ac.setText(l_rpm, "RPM: {:.0f}".format(rpm))
+
+      ac.setText(l_boost, "Boost: {:.2f}".format(boost))  
+
+      ac.setText(l_fuelRangeKM, "Fuel range: {:.2f}km".format(fuelRangeKM))
+
+      ac.setText(l_odometer, "Distance {:.2f}".format(odometer))
+
+      ac.setText(l_fuel, "Fuel: {:.2f}".format(fuel))
+
+      ac.setText(l_fuelRangeLaps, "Fuel range: {:.2f} laps".format(fuelRangeLaps))     
+       
 
     if updateTimer > 0.1:
        updateTimer = 0
     if economyTimer > 1:
        economyTimer = 0
+    if prevLapFuelColorTimer > 10:
+       ac.setFontColor(l_prevLapFuelConsumption, 0.86, 0.86, 0.86, 1)
+       prevLapFuelColorTimer = 0
